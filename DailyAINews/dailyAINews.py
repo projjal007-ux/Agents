@@ -62,7 +62,10 @@ class NewsItem:
 
 def get_ist_timezone() -> timezone:
     if ZoneInfo is not None:
-        return ZoneInfo("Asia/Kolkata")
+        try:
+            return ZoneInfo("Asia/Kolkata")
+        except (KeyError, Exception):
+            pass
     return timezone(timedelta(hours=5, minutes=30))
 
 
