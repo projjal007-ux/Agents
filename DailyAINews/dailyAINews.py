@@ -13,8 +13,8 @@ This script is designed for one-time execution. Use an external scheduler
 Environment variables:
 - NEWSAPI_KEY              (required)
 - GITHUB_COPILOT_PAT       (required for AI summary)
-- GITHUB_MODEL             (optional, default: openai/gpt-4.1-mini)
-- GITHUB_MODELS_ENDPOINT   (optional, default: https://models.github.ai/inference/chat/completions)
+- GITHUB_MODEL             (optional, default: gpt-4o-mini)
+- GITHUB_MODELS_ENDPOINT   (optional, default: https://models.inference.ai.azure.com/chat/completions)
 - GMAIL_APP_PASSWORD       (required for Gmail SMTP)
 - EMAIL_FROM               (optional, default: atnew.ai@gmail.com)
 - EMAIL_TO                 (optional, default: projjal007@gmail.com)
@@ -47,8 +47,8 @@ DEFAULT_QUERY = '"Artificial Intelligance" OR "Artificial Intelligence" OR "Soft
 DEFAULT_SUBJECT = "Your Daily AI News - AtNews"
 DEFAULT_FROM = "atnew.ai@gmail.com"
 DEFAULT_TO = "projjal007@gmail.com"
-DEFAULT_GITHUB_MODEL = "openai/gpt-4.1-mini"
-DEFAULT_MODELS_ENDPOINT = "https://models.github.ai/inference/chat/completions"
+DEFAULT_GITHUB_MODEL = "gpt-4o-mini"
+DEFAULT_MODELS_ENDPOINT = "https://models.inference.ai.azure.com/chat/completions"
 
 
 @dataclass
