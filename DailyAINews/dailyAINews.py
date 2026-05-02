@@ -25,6 +25,7 @@ Environment variables:
 from __future__ import annotations
 
 import json
+import html
 import os
 import smtplib
 import sys
@@ -33,7 +34,10 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import List
 
 try:
@@ -49,6 +53,7 @@ DEFAULT_FROM = "atnew.ai@gmail.com"
 DEFAULT_TO = "projjal007@gmail.com"
 DEFAULT_GITHUB_MODEL = "gpt-4o-mini"
 DEFAULT_MODELS_ENDPOINT = "https://models.inference.ai.azure.com/chat/completions"
+BANNER_FILENAME = "AtNew_banner.jpeg"
 
 
 @dataclass
@@ -207,23 +212,111 @@ def compose_email_body(items: List[NewsItem], summary_text: str) -> str:
             ]
         )
 
-    lines.append(f"Generated at: {datetime.now(get_ist_timezone()).isoformat()}")
+    lines.extend(
+        [
+            f"Generated at: {datetime.now(get_ist_timezone()).isoformat()}",
+            "",
+            "Best Regards,",
+            "AtNews Agent",
+        ]
+    )
     return "\n".join(lines)
+
+
+def _summary_to_html(summary_text: str) -> str:
+    rendered_lines = []
+    for raw_line in summary_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        escaped = html.escape(line)
+        if line.startswith(("- ", "* ")):
+            rendered_lines.append(f"<li>{html.escape(line[2:].strip())}</li>")
+        elif line[0].isdigit() and (")" in line[:4] or "." in line[:4]):
+            rendered_lines.append(f"<li>{escaped}</li>")
+        else:
+            rendered_lines.append(f"<p style=\"margin:8px 0;color:#22303d;line-height:1.5;\">{escaped}</p>")
+
+    list_items = [line for line in rendered_lines if line.startswith("<li>")]
+    paragraphs = [line for line in rendered_lines if line.startswith("<p")]
+    list_html = ""
+    if list_items:
+        list_html = (
+            "<ul style=\"margin:8px 0 0 18px;padding:0;color:#22303d;line-height:1.5;\">"
+            + "".join(list_items)
+            + "</ul>"
+        )
+
+    return "".join(paragraphs) + list_html
+
+
+def compose_email_html(items: List[NewsItem], summary_text: str, include_banner: bool) -> str:
+    summary_html = _summary_to_html(summary_text)
+    article_rows = []
+    for i, item in enumerate(items, start=1):
+        article_rows.append(
+            "<div style=\"margin-bottom:14px;padding:12px;border:1px solid #d9e1ea;"
+            "border-radius:10px;background:#f8fbff;\">"
+            f"<p style=\"margin:0 0 6px 0;font-weight:700;color:#102a43;\">{i}) {html.escape(item.title)}</p>"
+            f"<p style=\"margin:0;color:#334e68;\"><strong>Source:</strong> {html.escape(item.source)}</p>"
+            f"<p style=\"margin:0;color:#334e68;\"><strong>Published:</strong> {html.escape(item.published_at)}</p>"
+            f"<p style=\"margin:4px 0 0 0;\"><a href=\"{html.escape(item.url)}\" style=\"color:#0b63ce;\">Read article</a></p>"
+            "</div>"
+        )
+
+    banner_html = ""
+    if include_banner:
+        banner_html = (
+            "<div style=\"margin-bottom:14px;\">"
+            "<img src=\"cid:atnews_banner\" alt=\"AtNews Banner\" "
+            "style=\"width:100%;max-width:640px;border-radius:10px;display:block;\"/>"
+            "</div>"
+        )
+
+    generated_at = html.escape(datetime.now(get_ist_timezone()).isoformat())
+    return (
+        "<html><body style=\"margin:0;padding:0;background:#f4f7fb;font-family:Segoe UI,Arial,sans-serif;\">"
+        "<div style=\"max-width:680px;margin:20px auto;background:#ffffff;border:1px solid #e5e9f0;"
+        "border-radius:12px;padding:20px;\">"
+        f"{banner_html}"
+        "<h2 style=\"margin:0 0 10px 0;color:#0b63ce;\"><strong>Your Daily AI News Digest</strong></h2>"
+        "<h3 style=\"margin:14px 0 8px 0;color:#1f7a8c;\"><strong>Summary</strong></h3>"
+        f"{summary_html}"
+        "<h3 style=\"margin:18px 0 10px 0;color:#1f7a8c;\"><strong>Source Articles</strong></h3>"
+        f"{''.join(article_rows)}"
+        f"<p style=\"margin:14px 0 0 0;color:#627d98;font-size:13px;\"><strong>Generated at:</strong> {generated_at}</p>"
+        "<p style=\"margin:18px 0 0 0;color:#334e68;\">Best Regards,<br/><strong>AtNews Agent</strong></p>"
+        "</div></body></html>"
+    )
 
 
 def send_email(
     sender: str,
     recipient: str,
     subject: str,
-    body: str,
+    body_text: str,
+    body_html: str,
     app_password: str,
     smtp_host: str = "smtp.gmail.com",
     smtp_port: int = 465,
 ) -> None:
-    msg = MIMEText(body, "plain", "utf-8")
+    msg = MIMEMultipart("related")
     msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = recipient
+
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(body_text, "plain", "utf-8"))
+    alt.attach(MIMEText(body_html, "html", "utf-8"))
+    msg.attach(alt)
+
+    banner_path = Path(__file__).resolve().parent / BANNER_FILENAME
+    if banner_path.exists():
+        with banner_path.open("rb") as banner_file:
+            banner = MIMEImage(banner_file.read())
+        banner.add_header("Content-ID", "<atnews_banner>")
+        banner.add_header("Content-Disposition", "inline", filename=BANNER_FILENAME)
+        msg.attach(banner)
 
     with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as server:
         server.login(sender, app_password)
@@ -260,14 +353,16 @@ def run_job() -> None:
         print(f"[WARN] AI summary failed ({exc}). Using fallback summary.")
         summary_text = fallback_summary(items)
 
-    email_body = compose_email_body(items, summary_text)
+    email_body_text = compose_email_body(items, summary_text)
+    email_body_html = compose_email_html(items, summary_text, include_banner=True)
 
     print(f"[INFO] Sending email to {recipient}...")
     send_email(
         sender=sender,
         recipient=recipient,
         subject=DEFAULT_SUBJECT,
-        body=email_body,
+        body_text=email_body_text,
+        body_html=email_body_html,
         app_password=gmail_app_password,
         smtp_host=smtp_host,
         smtp_port=smtp_port,
