@@ -24,8 +24,8 @@ jobs:
       - name: Run Daily AI News script
         env:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
-          GITHUB_COPILOT_PAT: ${{ secrets.GITHUB_COPILOT_PAT }}
+          COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_FROM: atnew.ai@gmail.com
-          EMAIL_TO: projjal007@gmail.com
-        run: python DailyAINews/dailyAINews.py
+          EMAIL_TO: projjal007@gmail.com,projwal20@gmail.com,kalyan.halder12@gmail.com
+        run: python Agents/DailyAINews/dailyAINews.py
